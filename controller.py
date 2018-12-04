@@ -115,7 +115,7 @@ while True:
                 print('Username: '+account.username)
                 print('Account ID: '+str(account.account_id))
                 print('Password: **HIDDEN**')
-                print('Email: ')
+                print('Email: '+account.email)
                 print('Balance: '+str(bal))
                 print('\nTo change Account Information, type "Change".\nOtherwise, press 1 to return to Main Menu.')
                 choice = input()
@@ -123,7 +123,7 @@ while True:
                     exit_condition = True
                     while exit_condition:
                         view.change_info()
-                        choice = input('What would you like to change? ')
+                        choice = input('\nWhat would you like to change? ')
                         if choice.capitalize() == 'Username' or choice == '1':
                             new_un  = input("Enter new Username: ")
                             conf_un = input('Confirm Username: ')
@@ -132,16 +132,13 @@ while True:
                                 if exists:
                                     print('Username already exists!')
                                     input()
-                                    exit_condition = False
                                 else:
                                     account.update_un(new_un)
                                     view.success_un(new_un)
                                     input()
-                                    exit_condition = False
                             else:
                                 view.un_dont_match()
                                 input()
-                                exit_condition = False
                         elif choice.capitalize() == 'Password' or choice == '2':
                             pw = input('Enter current password: ')
                             if pass_hash(pw) != account.pw_hash:
@@ -157,10 +154,31 @@ while True:
                                 else:
                                     view.pass_dont_match()
                                     input()
-                    #elif choice.capitalize() == 'Email' or choice == '3':
-                    else:
-                        view.bad_input()
-                        input()
+                        elif choice.capitalize() == 'Email' or choice == '3':
+                            email  = input("What's your current email? ")
+                            if email != account.email:
+                                print('That is not your email.')
+                                input()
+                            else:
+                                em     = input('Enter new Email: ')
+                                new_em = input('Confirm new Email: ')
+                                if em == new_em:
+                                    exists = account.check_em(em)
+                                    if exists:
+                                        print('Email is already in use.')
+                                        input()
+                                    else:
+                                        account.update_em(em)
+                                        view.success_new_em(em)
+                                        input()
+                                else:
+                                    print('Emails do not match.')
+                                    input()
+                        elif choice.capitalize() == 'Return' or choice == '4':
+                            exit_condition = False
+                        else:
+                            print('Choose from the menu options.')
+                            input()
                     
                 else:
                     view.bad_input()
@@ -179,6 +197,7 @@ while True:
         firstname = input('\nWhat is your first name? ').capitalize()
         lastname  = input('What is your last name? ').capitalize()
         username  = input('Enter Username: ')
+        email     = input('Enter Email: ')
         password  = input('Enter Password: ')
         conf_pass = input('Confirm Password: ')
         if password == conf_pass:
@@ -186,6 +205,7 @@ while True:
             account.firstname  = firstname
             account.lastname   = lastname
             account.username   = username
+            account.email      = email
             account.pw_hash    = pass_hash(password)
             account.account_id = new_id()
             account.save()

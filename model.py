@@ -61,6 +61,7 @@ class Account:
         self.firstname   = row.get('firstname')
         self.lastname    = row.get('lastname')
         self.username    = row.get('username')
+        self.email       = row.get('email')
         self.account_id  = row.get('account_id')
         self.account_bal = row.get('account_bal',0.0)
         self.pw_hash     = row.get('pw_hash')
@@ -133,6 +134,19 @@ class Account:
         if row:
             return bool(row)
     
+    def check_em(self,em):
+        with OpenCursor() as cur:
+            SQL = """ SELECT email FROM accounts WHERE email=?; """
+            val = (em,)
+            cur.execute(SQL,val)
+            row = cur.fetchone()
+        if row:
+            return bool(row)
+
+    def update_em(self,em):
+        self.email = em
+        self.save()
+    
     def update_un(self,username):
         self.username = username
         self.save()
@@ -204,19 +218,19 @@ class Account:
             with OpenCursor() as cur:
                 SQL = """ UPDATE accounts SET
                     username=?,firstname=?,lastname=?,
-                    account_id=?,account_bal=?,pw_hash=?
+                    account_id=?,email=?,account_bal=?,pw_hash=?
                     WHERE pk=?; """
                 val = (self.username,self.firstname,self.lastname,
-                    self.account_id,self.account_bal,self.pw_hash,self.pk)
+                    self.account_id,self.email,self.account_bal,self.pw_hash,self.pk)
                 cur.execute(SQL,val)
         else:
             with OpenCursor() as cur:
                 SQL = """ INSERT INTO accounts(
-                    username,firstname,lastname,account_id,
+                    username,firstname,lastname,account_id,email,
                     account_bal,pw_hash ) VALUES (
-                    ?,?,?,?,?,?); """
+                    ?,?,?,?,?,?,?); """
                 val = (self.username,self.firstname,self.lastname,
-                    self.account_id,self.account_bal,self.pw_hash)
+                    self.account_id,self.email,self.account_bal,self.pw_hash)
                 cur.execute(SQL,val)
                 self.pk = cur.lastrowid
 

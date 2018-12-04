@@ -18,9 +18,11 @@ def run():
         lastname VARCHAR,
         account_bal FLOAT,
         username VARCHAR,
+        email VARCHAR,
         pw_hash VARCHAR,
         account_id INTEGER,
-        CONSTRAINT unique_user_name UNIQUE(username),
+        CONSTRAINT unique_email UNIQUE(email),
+        CONSTRAINT unique_username UNIQUE(username),
         CONSTRAINT unique_account_id UNIQUE(account_id)
     );""")
 

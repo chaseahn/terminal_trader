@@ -109,7 +109,7 @@ def change_info():
     print('        **    ** **   **  **  **   **  **     **  **        ')
     print('        **    **  **  **  **  ******   *****  ***  **       ')
     print('------------------------------------------------------------')
-    print('   1. USERNAME     |     2. PASSWORD     |    3. EMAIL      ')                           
+    print('  1. USERNAME  |  2. PASSWORD   |  3. EMAIL   |  4. RETURN  ')                           
     print('------------------------------------------------------------')
 def pass_dont_match():
     print('Passwords do not match. Try Again!')
@@ -145,6 +145,12 @@ def sell_success(symbol,shares,price):
 
 def success_un(new_un):
     print('You have changed your Username to {}.'.format(new_un))
+
+def success_new_em(em):
+    print('You have changed you Email to {}.'.format(em))
+
+def success_new_pw():
+    print('You have change your password.')
 
 def un_dont_match():
     print("Usernames don't match!")
