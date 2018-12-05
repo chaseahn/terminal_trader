@@ -1,1 +1,2 @@
-succuess_new_em(em)
+global CON
+    global CUR

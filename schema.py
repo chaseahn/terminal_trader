@@ -20,7 +20,8 @@ def run():
         username VARCHAR,
         email VARCHAR,
         pw_hash VARCHAR,
-        account_id INTEGER,
+        account_id VARCHAR,
+        admin_status VARCHAR,
         CONSTRAINT unique_email UNIQUE(email),
         CONSTRAINT unique_username UNIQUE(username),
         CONSTRAINT unique_account_id UNIQUE(account_id)
@@ -49,6 +50,29 @@ def run():
         account_pk INTEGER,
         FOREIGN KEY(account_pk) REFERENCES accounts(pk)
     );""")
+
+    # CUR.execute("""DROP TABLE IF EXISTS master;""")
+    # # create accounts table
+    # CUR.execute("""CREATE TABLE master(
+    #     pk INTEGER PRIMARY KEY AUTOINCREMENT,
+    #     username VARCHAR,
+    #     balance FLOAT,
+    #     pw_hash VARCHAR,
+    #     trade_pk INTEGER,
+    #     FOREIGN KEY(trade_pk) REFERENCES trades(pk)
+    # );""")
+
+    # CUR.execute("""DROP TABLE IF EXISTS master_sheet;""")
+    # # create accounts table
+    # CUR.execute("""CREATE TABLE master_sheet(
+    #     pk INTEGER PRIMARY KEY AUTOINCREMENT,
+    #     account_pk INTEGER,
+    #     symbol VARCHAR,
+    #     skim_amount FLOAT,
+    #     trade_pk INTEGER,
+    #     FOREIGN KEY(account_pk) REFERENCES accounts(pk),
+    #     FOREIGN KEY(trade_pk) REFERENCES trades(pk)
+    # );""")
 
     CON.commit()
     CUR.close()

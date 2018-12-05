@@ -15,18 +15,17 @@ SALT = "BANANANANANANANANANA"
 #length of ACCOUNT ID digits
 ACC_ID_DIG = 10
 
+HC = .01
+
 def pass_hash(string):
     hasher = hashlib.sha256()
     hasher.update((SALT+string).encode('utf-8'))
     return hasher.hexdigest()
 
 def lookup_price(symbol):
-    try:
-        results = requests.get(API_URL.format(symbol))
-        data = results.json()['latestPrice']
-        return data
-    except JSONDecodeError:
-        raise ValueError('Symbol does not exist.')
+    results = requests.get(API_URL.format(symbol))
+    data = results.json()['latestPrice']
+    return data
 
 def generate_account_id():
     minimum = 10**(ACC_ID_DIG-1)
@@ -56,15 +55,16 @@ class Account:
             self.row_set(row)
     
     def row_set(self,row={}):
-        row              = dict(row)
-        self.pk          = row.get('pk')
-        self.firstname   = row.get('firstname')
-        self.lastname    = row.get('lastname')
-        self.username    = row.get('username')
-        self.email       = row.get('email')
-        self.account_id  = row.get('account_id')
-        self.account_bal = row.get('account_bal',0.0)
-        self.pw_hash     = row.get('pw_hash')
+        row               = dict(row)
+        self.pk           = row.get('pk')
+        self.firstname    = row.get('firstname')
+        self.lastname     = row.get('lastname')
+        self.username     = row.get('username')
+        self.email        = row.get('email')
+        self.account_id   = row.get('account_id')
+        self.account_bal  = row.get('account_bal',0.0)
+        self.pw_hash      = row.get('pw_hash')
+        self.admin_status = row.get('admin_status')
     
     def get_balance(self,user,pw):
         pw_hash = pass_hash(pw)
@@ -150,9 +150,33 @@ class Account:
     def update_un(self,username):
         self.username = username
         self.save()
+    
+    def master_accounts(self):
+        with OpenCursor() as cur:
+            SQL = """ SELECT * FROM accounts WHERE admin_status=?; """
+            cur.execute(SQL, ('NOT_ADMIN',))
+            data = cur.fetchall()
+        return [Account(rows) for rows in data]
 
-    def change_username(self):
-        pass
+    def master_positions(self):
+        with OpenCursor() as cur:
+            SQL = """ SELECT * FROM positions WHERE account_pk!=?; """
+            cur.execute(SQL, (1,))
+            data = cur.fetchall()
+        return [Position(rows) for rows in data]
+
+    def master_history(self):
+        with OpenCursor() as cur:
+            SQL = """ SELECT * FROM trades WHERE account_pk!=? ORDER BY time DESC ; """
+            cur.execute(SQL, (1,))
+            data = cur.fetchall()
+        return [Trades(rows)for rows in data]
+    
+    def __repr__(self):
+        bal = round(self.account_bal,2)
+        bal = '$'+str(bal)
+        output = 'Account: {}, Username: {}, Balance: {}'
+        return output.format(self.pk,self.username,bal)
 
     def see_trade_history(self):
         with OpenCursor() as cur:
@@ -179,37 +203,72 @@ class Account:
     def decrease_shares(self,symbol,shares):
         dec = self.get_position(symbol)
         if dec.shares < int(shares):
-            raise ValueError("Not enough shares of {}.".format(symbol))
+            raise ValueError
         dec.shares -= int(shares)
         dec.save()
     
-    def make_trade(self,symbol,shares,price): #APPL,3,600
+    def make_trade(self,symbol,shares,user_price): #APPL,3,600
         trade            = Trades()
         trade.account_pk = self.pk
         trade.symbol     = symbol
         trade.shares     = shares
-        trade.price      = price
+        trade.price      = user_price
         trade.save()
     
     def buy(self,symbol,shares,price=None):
+        num = shares.isdigit()
+        if not num:
+            raise TypeError
         symbol = symbol.upper()
         if not price:
             price = float(lookup_price(symbol))
-        if self.account_bal < int(shares) * price:
-            raise ValueError('Insufficient Funds :(')
+        total_price = int(shares)*float(price)
+        user_price  = float(total_price) * (1+HC)
+        skim_amount = float(user_price) - float(total_price)
+        if self.account_bal < user_price:
+            raise ValueError
         self.increase_shares(symbol,shares)
-        self.make_trade(symbol,shares,price)
-        self.account_bal -= int(shares)*float(price)
+        self.make_trade(symbol,shares,user_price)
+        self.account_bal -= user_price
+        self.master_balance(skim_amount)
         self.save()
     
     def sell(self,symbol,shares,price=None):
+        num = shares.isdigit()
+        if not num:
+            raise TypeError
         symbol = symbol.upper()
         if not price:
             price = lookup_price(symbol)
+        total_price = int(shares)*float(price)
+        user_price  = float(total_price) * (1-HC)
+        skim_amount = float(total_price) * HC
         self.decrease_shares(symbol,shares)
-        self.make_trade(symbol,-int(shares),price)
-        self.account_bal += int(shares)*float(price)
+        self.make_trade(symbol,-int(shares),user_price)
+        self.account_bal += user_price
+        self.master_balance(skim_amount)
         self.save()
+    
+    def get_master(self):
+        with OpenCursor() as cur:
+            SQL = """ SELECT * FROM accounts WHERE pk=?; """
+            val = (1,)
+            cur.execute(SQL,val)
+            row = cur.fetchone()
+            return Account(row)
+    
+    def master_balance(self,skim_amount):
+        master = self.get_master()
+        master.account_bal += float(skim_amount)
+        master.save()
+
+    # def master_trade(self,skim_amount,symbol):
+    #     master             = MasterSheet()
+    #     master.account_pk  = self.pk
+    #     master.skim_amount = float(skim_amount)
+    #     master.symbol      = symbol
+    #     master.trade_pk    = self.trade_pk
+    #     master.save()
 
     def save(self):
         #IF TRUE PK EXISTS AND UPDATE THE ACCOUNT INFO
@@ -218,19 +277,19 @@ class Account:
             with OpenCursor() as cur:
                 SQL = """ UPDATE accounts SET
                     username=?,firstname=?,lastname=?,
-                    account_id=?,email=?,account_bal=?,pw_hash=?
+                    account_id=?,email=?,account_bal=?,pw_hash=?,admin_status=?
                     WHERE pk=?; """
                 val = (self.username,self.firstname,self.lastname,
-                    self.account_id,self.email,self.account_bal,self.pw_hash,self.pk)
+                    self.account_id,self.email,self.account_bal,self.pw_hash,self.admin_status,self.pk)
                 cur.execute(SQL,val)
         else:
             with OpenCursor() as cur:
                 SQL = """ INSERT INTO accounts(
                     username,firstname,lastname,account_id,email,
-                    account_bal,pw_hash ) VALUES (
-                    ?,?,?,?,?,?,?); """
+                    account_bal,pw_hash,admin_status ) VALUES (
+                    ?,?,?,?,?,?,?,?); """
                 val = (self.username,self.firstname,self.lastname,
-                    self.account_id,self.email,self.account_bal,self.pw_hash)
+                    self.account_id,self.email,self.account_bal,self.pw_hash,self.admin_status)
                 cur.execute(SQL,val)
                 self.pk = cur.lastrowid
 
@@ -306,3 +365,73 @@ class Trades:
         output = 'Account: {}, Symbol: {}, Volume: {}, Amount: {}, Time: {}'
         return output.format(self.account_pk,self.symbol,self.shares,self.price,self.time)
 
+# class Master:
+
+#     def __init__(self, row={}, username = '', password =''):
+#         if username:
+#             self.check_cred(username,password)
+#         else:
+#             self.row_set()
+    
+#     def __bool__(self):
+#         return bool(self.pk)
+    
+#     def save(self):
+#         with OpenCursor() as cur:
+#             SQL = """ UPDATE master SET balance=? WHERE pk=?; """
+#             val = (self.balance, self.pk)
+#             cur.execute(SQL,val)
+
+#     def row_set(self,row={}):
+#         row            = dict(row)
+#         self.pk        = row.get('pk')
+#         self.username  = row.get('username')
+#         self.balance   = row.get('balance')
+#         self.pw_hash   = row.get('pw_hash')
+    
+#     def check_cred(self,username,password):
+#         pw_hash = pass_hash(password)
+#         with OpenCursor() as cur:
+#             SQL = """ SELECT * FROM master WHERE
+#                   username=? and pw_hash=?; """
+#             val = (username,pw_hash)
+#             cur.execute(SQL,val)
+#             row = cur.fetchone()
+#         if row:
+#             row            = dict(row)
+#             self.pk        = row.get('pk')
+#             self.username  = row.get('username')
+#             self.balance   = row.get('balance')
+#             self.pw_hash   = row.get('pw_hash')
+#         else:
+#             self.row_set()
+       
+# class MasterSheet:
+
+#     def __init__(self, row ={}):
+#         row              = dict(row)
+#         self.pk          = row.get('pk')
+#         self.account_pk  = row.get('account_pk')
+#         self.symbol      = row.get('symbol')
+#         self.skim_amount = row.get('skim_amount')
+#         self.trade_pk    = row.get('trade_pk')
+    
+#     def __bool__(self):
+#         return bool(self.pk)
+    
+#     def save(self):
+#         if self:
+#             with OpenCursor() as cur:
+#                 SQL = """ UPDATE trades SET account_pk=?,skim_amount=?,
+#                       symbol=?,trade_pk=? WHERE pk=?; """
+#                 val = (self.account_pk, self.skim_amount, self.symbol,self.trade_pk,self.pk)
+#                 cur.execute(SQL,val)
+#         else:
+#             if not self.time:
+#                 self.time = int(time.time())
+#             with OpenCursor() as cur:
+#                 SQL = """ INSERT INTO trades(
+#                     account_pk,skim_amount,symbol,trade_pk
+#                     ) VALUES (?,?,?,?); """
+#                 val = (self.account_pk,self.skim_amount,self.symbol,self.trade_pk)
+#                 cur.execute(SQL,val)
